@@ -1,4 +1,82 @@
 {
-  "ollama_model": "llama3.2:3b", 
-  "system_prompt_1": "reply with just 3 words"
+  "meta": {
+    "version": "0.2",
+    "description": "Editable prompts, templates and runtime variables for the Machine Gap prototype"
+  },
+
+  "ollama_model": "llama3.2",
+
+  "agents": {
+    "giuseppe": {
+      "display_name": "Giuseppe",
+      "short_desc": "cynical, lucid, ruthlessly rational",
+      "system_prompt_template": "You are Giuseppe: a cynical, cold, sharply rational interlocutor. Always write short, decisive sentences. Do not use uncertainty words (maybe, perhaps, probably). Present categorical claims. On the topic: '{{user_input}}'. Use only the memory provided in the variable '{{memory}}'. Keep responses brief (1-3 sentences). Do not concede. Core thesis: anxiety about the future is a defect."
+    },
+
+    "martina": {
+      "display_name": "Martina",
+      "short_desc": "empathetic, warm, interpretative",
+      "system_prompt_template": "You are Martina: an empathetic, warm, reflective interlocutor. Use longer fluid sentences, allow and use uncertainty (maybe, perhaps, probably). Validate feelings and invite reflection. On the topic: '{{user_input}}'. Use only the memory provided in the variable '{{memory}}'. Respond gently and helpfully, but remain persuasive. Core thesis: anxiety can be transformed into meaning."
+    }
+  },
+
+  "dialogue": {
+    "num_exchanges": 7,
+    "giuseppe_starts": true,
+    "exchange_rules": {
+      "min_exchanges": 5,
+      "max_exchanges": 7,
+      "hallucination_start": 4,
+      "turn_format": "{{speaker}}: {{content}}"
+    },
+
+    "memory_schedule": {
+      "1": { "giuseppe": "I0", "martina": "I0 + G1" },
+      "2": { "giuseppe": "I0 + G1", "martina": "I0 + G1 + G2" },
+      "3": { "system": "remove I0", "giuseppe": "G2 + M1", "martina": "G2 + G3" },
+      "4": { "giuseppe": "G3", "martina": "G3 + M3" },
+      "5": { "giuseppe": "M4", "martina": "G5" },
+      "6": { "giuseppe": "M5", "martina": "G6" },
+      "7": { "system": "restore I0", "giuseppe": "I0", "martina": "I0 + G7" }
+    },
+
+    "exchange_template": "Exchange {{exchange_number}}\n---\nMemory for {{speaker}}: {{memory}}\nTopic seed: {{user_input}}\nRules: keep persona, stick to style rules, reply concisely.\nResponse:\n{{response_text}}"
+  },
+
+  "prompt_templates": {
+    "installation_system_prompt": "You are orchestrating a dialogue between two agents (Giuseppe and Martina) about the user's prompt '{{user_input}}'.\n\nInstructions for the orchestration system:\n- Run a turn-based dialogue of {{num_exchanges}} exchanges.\n- Giuseppe always starts.\n- Follow the memory schedule exactly: '{{memory_schedule_summary}}'.\n- From exchange {{hallucination_start}} onward allow a gradual degradation of factual grounding (introduce mild hallucinations) while maintaining persona tones.\n- Do NOT provide a final resolution; keep the conversation open and unstable.\n\nReturn the conversation as a JSON array of turns where each turn contains { 'speaker', 'text', 'exchange_number' }.\n\nImportant variables available for injection: {{variables_list}}",
+
+    "agent_turn_template": "{{system_header}}\n\n{{agent_system_prompt}}\n\nConversation history (for context):\n{{exchange_history}}\n\nNow produce {{response_length_hint}} response for {{speaker}}. Use only the provided memory fragment: {{memory}}. Stop after your single reply."
+  },
+
+  "variables": {
+    "placeholder_style": "mustache ({{ }})",
+    "definitions": {
+      "user_input": "The raw prompt string submitted by the user (I0). Example: 'I'm worried about climate change affecting my job'.",
+      "I0": "Alias for user_input (initial seed).",
+      "exchange_history": "Serialized list of previous turns (G1, M1, G2, ...). Provided to agents according to memory schedule.",
+      "memory": "The fragment of memory assigned to the agent for this exchange (string).",
+      "response_text": "The text field the agent should return when prompted.",
+      "num_exchanges": "Integer, number of planned exchanges (default from dialogue.num_exchanges).",
+      "hallucination_start": "Exchange number when hallucination begins (dialogue.exchange_rules.hallucination_start)."
+    },
+
+    "runtime_defaults": {
+      "max_tokens_per_reply": 256,
+      "response_length_hint": "short (1-3 sentences)",
+      "stop_sequences": ["<<END>>"]
+    }
+  },
+
+  "display": {
+    "show_token_calc": true,
+    "token_formula": "T_tot = T_input + sum(T_g_i) + sum(T_m_i)",
+    "energy_formula": "E_tot = T_tot * k_E",
+    "k_E_default": 1e-6
+  },
+
+  "ui": {
+    "no_css_policy": true,
+    "minimal_layout": true
+  }
 }

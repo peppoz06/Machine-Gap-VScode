@@ -3,23 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ollama boilerplate</title>
+  <title>Machine Gap</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-  <h1>Ollama boilerplate</h1>
+  <!-- Stage 1: Invitation & Input -->
+  <div id="stage-input">
+    <h1>Machine Gap</h1>
+    <p>
+      You are about to engage with a machine capable of thinking.
+      Present a concern, a question, or an anxiety.
+      Two opposing voices will respond.
+      The conversation will unfold.
+      Meaning will emerge—and collapse.
+    </p>
+    <form id="form">
+      <input id="input" type="text" placeholder="Enter your prompt..." autocomplete="off">
+      <button type="submit">Submit</button>
+    </form>
+    <!-- Status/logging area -->
+    <div id="status" style="margin-top:1rem; font-size:0.85rem; color:#666; border:1px solid #ccc; padding:8px; min-height:2rem; font-family:monospace; white-space:pre-wrap; word-break:break-word;"></div>
+  </div>
 
-  <!-- This is where the messages will appear -->
-  <div id="chat"></div>
+  <!-- Stage 2: Dialogue & Metrics (hidden until submitted) -->
+  <div id="stage-output" style="display:none;">
+    <h1>Machine Gap</h1>
+    <!-- Status/logging area -->
+    <div id="status-output" style="margin-bottom:1rem; font-size:0.85rem; color:#666; border:1px solid #ccc; padding:8px; min-height:1rem; font-family:monospace; white-space:pre-wrap; word-break:break-word;"></div>
+    <!-- This is where the dialogue appears -->
+    <div id="dialogue"></div>
+    <!-- Metrics displayed at the end -->
+    <div id="metrics"></div>
+  </div>
 
-  <!-- The form to type and send a message -->
-  <form id="form">
-    <input id="input" type="text" placeholder="Type a message..." autocomplete="off">
-    <button type="submit">Send</button>
-  </form>
+  <!-- Legacy chat div (kept for backwards compatibility with scripts) -->
+  <div id="chat" style="display:none;"></div>
 
   <!-- Scripts are split into small files for readability -->
+  <script src="/static/scripts/logging.js"></script>
   <script src="/static/scripts/chat.js"></script>
   <script src="/static/scripts/api.js"></script>
   <script src="/static/scripts/main.js"></script>
