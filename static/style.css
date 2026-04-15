@@ -1,0 +1,98 @@
+/* ------------------------------------------------
+   CSS Variables — change these to restyle the app
+   ------------------------------------------------ */
+:root {
+  --font: system-ui, sans-serif;
+  --bg: #fff;
+  --text: #111;
+  --border: #ccc;
+  --bubble-user: #e8e8e8;
+  --bubble-assistant: #f5f5f5;
+  --radius: 12px;
+  --gap: 8px;
+}
+
+/* Reset default browser spacing */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Center everything in a narrow column */
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+h1 {
+  margin-bottom: var(--gap);
+}
+
+/* The chat area where messages appear */
+#chat {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--gap);
+  margin-bottom: var(--gap);
+
+  /* Messages stack vertically */
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* Each message is a bubble */
+.msg {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  max-width: 80%;
+  line-height: 1.4;
+}
+
+/* User messages: right side */
+.msg-user {
+  background: var(--bubble-user);
+  align-self: flex-end;
+}
+
+/* Assistant messages: left side */
+.msg-assistant {
+  background: var(--bubble-assistant);
+  align-self: flex-start;
+}
+
+/* "Thinking..." indicator */
+.thinking {
+  font-style: italic;
+  color: #999;
+}
+
+/* Put input and button side by side */
+form {
+  display: flex;
+  gap: var(--gap);
+}
+
+/* The text input takes all available space */
+input {
+  flex: 1;
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+button {
+  padding: var(--gap) 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+}

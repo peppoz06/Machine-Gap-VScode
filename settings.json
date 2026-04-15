@@ -1,0 +1,4 @@
+{
+  "ollama_model": "llama3.2:3b", 
+  "system_prompt_1": "reply with just 3 words"
+}
