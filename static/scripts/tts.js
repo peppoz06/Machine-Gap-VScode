@@ -95,11 +95,13 @@ function updateToggleButton() {
 }
 
 // Queue a turn for TTS
-function speakTurn(speaker, text) {
+function speakTurn(speaker, text, divElement) {
   console.log("🔵 speakTurn called: ttsEnabled=" + ttsEnabled + ", speaker=" + speaker);
   
   if (!ttsEnabled) {
     console.log("TTS disabled - not queuing speech");
+    // If voice disabled, show text immediately
+    if (divElement) divElement.style.opacity = "1";
     return;
   }
   
@@ -111,7 +113,8 @@ function speakTurn(speaker, text) {
   console.log("📢 Queuing speech for " + speaker + " (" + text.length + " chars)");
   ttsQueue.push({
     speaker: speaker,
-    text: text
+    text: text,
+    divElement: divElement  // Store the div element to reveal when speaking
   });
   
   console.log("Queue size: " + ttsQueue.length + ", Currently speaking: " + ttsSpeaking);
@@ -224,6 +227,15 @@ function processQueue() {
   utterance.onerror = function(event) {
     console.error("❌ Speech error for " + item.speaker + ": " + event.error);
     processQueue();
+  };
+  
+  utterance.onstart = function() {
+    console.log("🔊 Speech started for " + item.speaker);
+    // Reveal the text when voice starts speaking
+    if (item.divElement) {
+      item.divElement.style.opacity = "1";
+      console.log("✓ Text revealed for " + item.speaker);
+    }
   };
   
   // Speak the utterance

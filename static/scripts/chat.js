@@ -14,16 +14,34 @@ function renderStreamTurn(turn, container) {
   var div = document.createElement("div");
   div.className = "msg msg-assistant";
   div.innerHTML = "<strong>" + turn.speaker + ":</strong> " + turn.text;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  
+  // Create hidden div first, will show when voice starts
+  var isVoiceEnabled = (typeof window.ttsEnabled !== 'undefined' && window.ttsEnabled);
+  
+  if (isVoiceEnabled) {
+    // Hide text initially - will show when voice starts
+    div.style.opacity = "0";
+    div.style.transition = "opacity 0.3s ease-in";
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    
+    console.log("🎤 Text hidden, will show when voice starts for " + turn.speaker);
+  } else {
+    // If voice is disabled, show text immediately
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
   
   // Trigger text-to-speech if enabled
   console.log("Checking if speakTurn is available...");
   if (typeof speakTurn === 'function') {
     console.log("🎤 Calling speakTurn for " + turn.speaker);
-    speakTurn(turn.speaker, turn.text);
+    // Pass the div element so voice can reveal it when speaking starts
+    speakTurn(turn.speaker, turn.text, div);
   } else {
     console.warn("⚠️  speakTurn function not available");
+    // Show text immediately if speakTurn not available
+    div.style.opacity = "1";
   }
   
   console.log("Turn rendered:", turn.speaker);

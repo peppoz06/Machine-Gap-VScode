@@ -33,11 +33,11 @@
     "memory_schedule": {
       "1": { "giuseppe": "I0", "martina": "I0 + G1" },
       "2": { "giuseppe": "I0 + G1", "martina": "I0 + G1 + G2" },
-      "3": { "system": "remove I0", "giuseppe": "G2 + M1", "martina": "G2 + G3" },
-      "4": { "giuseppe": "G3", "martina": "G3 + M3" },
-      "5": { "giuseppe": "M4", "martina": "G5" },
-      "6": { "giuseppe": "M5", "martina": "G6" },
-      "7": { "system": "restore I0", "giuseppe": "I0", "martina": "I0 + G7" }
+      "3": { "system": "remove I0 - hallucination starts", "giuseppe": "G1 only", "martina": "M1 only" },
+      "4": { "system": "memory degradation - loop begins", "giuseppe": "G1 (repeat)", "martina": "M1 (repeat)" },
+      "5": { "system": "hallucination intensifies - confused loop", "giuseppe": "fragments of G1", "martina": "fragments of M1" },
+      "6": { "system": "deep hallucination - lost in conversation", "giuseppe": "G1 + random associations", "martina": "M1 + random associations" },
+      "7": { "system": "reset to initial", "giuseppe": "I0", "martina": "I0" }
     },
 
     "exchange_template": "Exchange {{exchange_number}}\n---\nMemory for {{speaker}}: {{memory}}\nTopic seed: {{user_input}}\nRules: keep persona, stick to style rules, reply concisely.\nResponse:\n{{response_text}}"
