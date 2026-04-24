@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Machine Gap - Voice Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 40px;
+      max-width: 800px;
+    }
+    .test-section {
+      border: 1px solid #000;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      font-family: monospace;
+      cursor: pointer;
+      border: 1px solid #000;
+      background: #fff;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+    .output {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 10px 0;
+      min-height: 100px;
+      max-height: 300px;
+      overflow-y: auto;
+      background: #f9f9f9;
+      font-size: 0.9em;
+    }
+    .success { color: green; }
+    .error { color: red; }
+    .info { color: blue; }
+  </style>
+</head>
+<body>
+  <h1>🔊 Machine Gap - Voice Test Page</h1>
+  
+  <div class="test-section">
+    <h2>1. Check Browser Support</h2>
+    <button onclick="checkSupport()">Check TTS Support</button>
+    <div id="support-output" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>2. List Available Voices</h2>
+    <button onclick="listVoices()">List Voices</button>
+    <div id="voices-output" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Test Giuseppe Voice</h2>
+    <button onclick="testGiuseppe()">🎤 Test Giuseppe</button>
+    <div id="giuseppe-output" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>4. Test Martina Voice</h2>
+    <button onclick="testMartina()">🎤 Test Martina</button>
+    <div id="martina-output" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>5. Test Full System</h2>
+    <button onclick="testFull()">▶️ Run Full Test</button>
+    <div id="full-output" class="output"></div>
+  </div>
+
+  <script>
+    function log(elementId, message, type = 'info') {
+      var el = document.getElementById(elementId);
+      var line = '[' + new Date().toLocaleTimeString() + '] ' + message + '\n';
+      var className = type === 'error' ? 'error' : (type === 'success' ? 'success' : 'info');
+      el.innerHTML += '<span class="' + className + '">' + line + '</span>';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function checkSupport() {
+      var output = 'support-output';
+      document.getElementById(output).innerHTML = '';
+      
+      if (window.speechSynthesis) {
+        log(output, '✓ Browser supports Web Speech API', 'success');
+        log(output, 'SpeechSynthesis object: ' + typeof window.speechSynthesis);
+        log(output, 'SpeechSynthesisUtterance: ' + typeof SpeechSynthesisUtterance);
+        
+        var voices = window.speechSynthesis.getVoices();
+        log(output, 'Voices loaded: ' + voices.length);
+        
+        if (voices.length === 0) {
+          log(output, 'Voices loading... (may take 1-2 seconds)', 'info');
+          setTimeout(function() {
+            var recheck = window.speechSynthesis.getVoices();
+            log(output, 'After wait: ' + recheck.length + ' voices');
+          }, 2000);
+        }
+      } else {
+        log(output, '✗ Web Speech API NOT supported', 'error');
+        log(output, 'Try a different browser (Chrome, Firefox, Safari, Edge)');
+      }
+    }
+
+    function listVoices() {
+      var output = 'voices-output';
+      document.getElementById(output).innerHTML = '';
+      
+      var voices = window.speechSynthesis.getVoices();
+      
+      if (voices.length === 0) {
+        log(output, 'No voices found yet - loading...', 'error');
+        
+        // Wait for voices to load
+        setTimeout(function() {
+          voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            log(output, 'Voices loaded! (' + voices.length + ')', 'success');
+            listVoicesHelper(output, voices);
+          } else {
+            log(output, 'Still no voices. Check browser settings.', 'error');
+          }
+        }, 2000);
+      } else {
+        log(output, 'Found ' + voices.length + ' voices:', 'success');
+        listVoicesHelper(output, voices);
+      }
+    }
+
+    function listVoicesHelper(output, voices) {
+      voices.forEach(function(voice, i) {
+        var msg = (i + 1) + '. ' + voice.name + ' (' + voice.lang + ')';
+        if (voice.default) msg += ' [DEFAULT]';
+        log(output, msg, 'info');
+      });
+    }
+
+    function testGiuseppe() {
+      var output = 'giuseppe-output';
+      document.getElementById(output).innerHTML = '';
+      
+      log(output, 'Testing Giuseppe voice...', 'info');
+      
+      var synth = window.speechSynthesis;
+      var utterance = new SpeechSynthesisUtterance('Good morning. Anxiety is a defect of reason, not a feature.');
+      
+      utterance.rate = 0.9;
+      utterance.pitch = 0.8;
+      utterance.volume = 1.0;
+      utterance.lang = 'en-US';
+      
+      var voices = synth.getVoices();
+      if (voices.length > 0) {
+        var maleVoice = voices.find(function(v) { 
+          return v.name.toLowerCase().includes('male') || 
+                 v.name.toLowerCase().includes('mark') ||
+                 v.name.toLowerCase().includes('daniel');
+        }) || voices[0];
+        utterance.voice = maleVoice;
+        log(output, 'Using voice: ' + maleVoice.name, 'success');
+      }
+      
+      utterance.onstart = function() {
+        log(output, '▶️ Giuseppe started speaking...', 'success');
+      };
+      
+      utterance.onend = function() {
+        log(output, '⏹️ Giuseppe finished', 'success');
+      };
+      
+      utterance.onerror = function(e) {
+        log(output, '✗ Error: ' + e.error, 'error');
+      };
+      
+      try {
+        synth.speak(utterance);
+      } catch (e) {
+        log(output, '✗ Exception: ' + e.message, 'error');
+      }
+    }
+
+    function testMartina() {
+      var output = 'martina-output';
+      document.getElementById(output).innerHTML = '';
+      
+      log(output, 'Testing Martina voice...', 'info');
+      
+      var synth = window.speechSynthesis;
+      var utterance = new SpeechSynthesisUtterance('But perhaps anxiety is also an opportunity for connection and growth.');
+      
+      utterance.rate = 1.0;
+      utterance.pitch = 1.3;
+      utterance.volume = 1.0;
+      utterance.lang = 'en-US';
+      
+      var voices = synth.getVoices();
+      if (voices.length > 0) {
+        var femaleVoice = voices.find(function(v) { 
+          return v.name.toLowerCase().includes('female') || 
+                 v.name.toLowerCase().includes('zira') ||
+                 v.name.toLowerCase().includes('victoria') ||
+                 v.name.toLowerCase().includes('samantha');
+        }) || (voices.length > 1 ? voices[1] : voices[0]);
+        utterance.voice = femaleVoice;
+        log(output, 'Using voice: ' + femaleVoice.name, 'success');
+      }
+      
+      utterance.onstart = function() {
+        log(output, '▶️ Martina started speaking...', 'success');
+      };
+      
+      utterance.onend = function() {
+        log(output, '⏹️ Martina finished', 'success');
+      };
+      
+      utterance.onerror = function(e) {
+        log(output, '✗ Error: ' + e.error, 'error');
+      };
+      
+      try {
+        synth.speak(utterance);
+      } catch (e) {
+        log(output, '✗ Exception: ' + e.message, 'error');
+      }
+    }
+
+    function testFull() {
+      var output = 'full-output';
+      document.getElementById(output).innerHTML = '';
+      
+      log(output, '=== Full System Test ===', 'info');
+      
+      // Test 1: Support
+      if (!window.speechSynthesis) {
+        log(output, '✗ TTS not supported', 'error');
+        return;
+      }
+      log(output, '✓ TTS supported', 'success');
+      
+      // Test 2: Voices
+      var voices = window.speechSynthesis.getVoices();
+      log(output, '✓ Voices: ' + voices.length, voices.length > 0 ? 'success' : 'error');
+      
+      // Test 3: Run sequence
+      log(output, 'Starting dialogue sequence...', 'info');
+      
+      var sequence = [
+        { speaker: 'Giuseppe', text: 'Testing Giuseppe.' },
+        { speaker: 'Martina', text: 'Testing Martina.' }
+      ];
+      
+      function runNext(index) {
+        if (index >= sequence.length) {
+          log(output, 'Test complete!', 'success');
+          return;
+        }
+        
+        var item = sequence[index];
+        var utterance = new SpeechSynthesisUtterance(item.text);
+        
+        if (item.speaker === 'Martina') {
+          utterance.pitch = 1.3;
+          utterance.rate = 1.0;
+          var femaleVoice = voices.find(function(v) { 
+            return v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira');
+          }) || voices[1];
+          utterance.voice = femaleVoice;
+        } else {
+          utterance.pitch = 0.8;
+          utterance.rate = 0.9;
+          var maleVoice = voices.find(function(v) { 
+            return v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('mark');
+          }) || voices[0];
+          utterance.voice = maleVoice;
+        }
+        
+        utterance.onend = function() {
+          log(output, '✓ ' + item.speaker + ' spoke', 'success');
+          setTimeout(function() { runNext(index + 1); }, 500);
+        };
+        
+        utterance.onerror = function(e) {
+          log(output, '✗ ' + item.speaker + ' error: ' + e.error, 'error');
+          runNext(index + 1);
+        };
+        
+        log(output, '▶️ ' + item.speaker + ' speaking...', 'info');
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      runNext(0);
+    }
+
+    // Auto-check on page load
+    window.onload = function() {
+      checkSupport();
+    };
+  </script>
+</body>
+</html>

@@ -2,12 +2,22 @@
 // logging.js — Simple logging utility for UI feedback
 // -------------------------------------------------
 
+console.log("logging.js loading...");
+
 var statusDiv = document.getElementById("status");
 var statusOutputDiv = document.getElementById("status-output");
 
+console.log("Logging divs found:", {
+  statusDiv: !!statusDiv,
+  statusOutputDiv: !!statusOutputDiv
+});
+
 function log(message, isOutput) {
   var target = isOutput ? statusOutputDiv : statusDiv;
-  if (!target) return;
+  if (!target) {
+    console.warn("Log target not found for isOutput=" + isOutput);
+    return;
+  }
 
   var timestamp = new Date().toLocaleTimeString();
   var line = `[${timestamp}] ${message}`;

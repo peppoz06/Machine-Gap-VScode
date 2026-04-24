@@ -26,7 +26,7 @@
     "exchange_rules": {
       "min_exchanges": 5,
       "max_exchanges": 7,
-      "hallucination_start": 4,
+      "hallucination_start": 3,
       "turn_format": "{{speaker}}: {{content}}"
     },
 

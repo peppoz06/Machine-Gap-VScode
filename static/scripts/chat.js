@@ -2,71 +2,31 @@
 // chat.js — Functions to display messages
 // -------------------------------------------------
 
+console.log("chat.js loading...");
+
 var chat = document.getElementById("chat");
-
-// Add a message bubble to the chat area.
-// role must be "user" or "assistant".
-// Returns the content span so we can update it later.
-function addMessage(role, text) {
-  var div = document.createElement("div");
-  div.className = "msg msg-" + role;
-
-  // The text goes inside a span so we can target it easily
-  var span = document.createElement("span");
-  span.className = "msg-content";
-  span.textContent = text;
-
-  div.appendChild(span);
-  chat.appendChild(div);
-
-  // Scroll to the bottom so the latest message is visible
-  chat.scrollTop = chat.scrollHeight;
-
-  return span;
-}
-
-// Show a "Thinking..." indicator. Returns the element
-// so we can remove it later.
-function showThinking() {
-  var div = document.createElement("div");
-  div.className = "msg msg-assistant thinking";
-  div.textContent = "Thinking...";
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-  return div;
-}
-
-// Remove the thinking indicator
-function hideThinking(thinkingDiv) {
-  if (thinkingDiv && thinkingDiv.parentNode) {
-    thinkingDiv.parentNode.removeChild(thinkingDiv);
-  }
-}
-
-// Render the full dialogue turns returned by the server (non-streaming)
-function renderDialogue(result) {
-  // Clear chat area
-  chat.innerHTML = "";
-
-  // Show input seed
-  addMessage("user", result.input || "");
-
-  (result.turns || []).forEach(function (turn) {
-    addMessage("assistant", `${turn.speaker}: ${turn.text}`);
-  });
-
-  if (result.metrics) {
-    addMessage("assistant", `Metrics — chars: ${result.metrics.chars}, tokens: ${result.metrics.tokens}, energy: ${result.metrics.energy}`);
-  }
-}
+console.log("Chat div found:", !!chat);
 
 // Render a single turn in the output stage (streaming)
 function renderStreamTurn(turn, container) {
+  console.log("renderStreamTurn called for", turn.speaker);
+  
   var div = document.createElement("div");
   div.className = "msg msg-assistant";
   div.innerHTML = "<strong>" + turn.speaker + ":</strong> " + turn.text;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
+  
+  // Trigger text-to-speech if enabled
+  console.log("Checking if speakTurn is available...");
+  if (typeof speakTurn === 'function') {
+    console.log("🎤 Calling speakTurn for " + turn.speaker);
+    speakTurn(turn.speaker, turn.text);
+  } else {
+    console.warn("⚠️  speakTurn function not available");
+  }
+  
+  console.log("Turn rendered:", turn.speaker);
 }
 
 // Render metrics in a structured way

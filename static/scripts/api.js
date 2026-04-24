@@ -2,11 +2,15 @@
 // api.js — Send a prompt to the server
 // -------------------------------------------------
 
+console.log("api.js loading...");
+
 async function sendPrompt(prompt, onTurn, onMetrics, onError) {
-  log("Fetching /stream_chat endpoint...", true);
+  console.log("sendPrompt called with prompt:", prompt.substring(0, 50));
   
   try {
     logClear(true);
+    log("Fetching /stream_chat endpoint...", true);
+    
     const response = await fetch("/stream_chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,14 +46,17 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
           const obj = JSON.parse(line);
 
           if (obj.type === "turn") {
+            console.log("Parsed turn:", obj.speaker);
             log(obj.speaker + ": " + obj.text.substring(0, 50) + "...", true);
             onTurn(obj);
           } else if (obj.type === "metrics") {
+            console.log("Parsed metrics");
             log("Metrics received: " + obj.tokens + " tokens, " + obj.energy.toFixed(6) + " energy", true);
             onMetrics(obj);
           }
         } catch (e) {
           logError("Failed to parse JSON line: " + e.message, true);
+          console.error("Parse error on line:", line);
         }
       }
     }
@@ -69,7 +76,9 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
     }
 
     log("Stream complete.", true);
+    console.log("Stream ended successfully");
   } catch (error) {
+    console.error("sendPrompt error:", error);
     logError("Fetch error: " + error.message, true);
     onError(error);
   }

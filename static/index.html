@@ -29,6 +29,10 @@
   <!-- Stage 2: Dialogue & Metrics (hidden until submitted) -->
   <div id="stage-output" style="display:none;">
     <h1>Machine Gap</h1>
+    <!-- Voice control button -->
+    <div style="margin-bottom:1rem;">
+      <button id="voice-toggle" style="padding:8px 16px; border:1px solid #000; background:#fff; font-family:monospace; cursor:pointer;">🔊 Enable Voice</button>
+    </div>
     <!-- Status/logging area -->
     <div id="status-output" style="margin-bottom:1rem; font-size:0.85rem; color:#666; border:1px solid #ccc; padding:8px; min-height:1rem; font-family:monospace; white-space:pre-wrap; word-break:break-word;"></div>
     <!-- This is where the dialogue appears -->
@@ -41,9 +45,10 @@
   <div id="chat" style="display:none;"></div>
 
   <!-- Scripts are split into small files for readability -->
-  <script src="/static/scripts/logging.js"></script>
-  <script src="/static/scripts/chat.js"></script>
-  <script src="/static/scripts/api.js"></script>
-  <script src="/static/scripts/main.js"></script>
+  <script src="/static/scripts/logging.js?v=1"></script>
+  <script src="/static/scripts/tts.js?v=2"></script>
+  <script src="/static/scripts/chat.js?v=2"></script>
+  <script src="/static/scripts/api.js?v=1"></script>
+  <script src="/static/scripts/main.js?v=2"></script>
 </body>
 </html>
