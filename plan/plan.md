@@ -100,7 +100,7 @@ No dialogue has started yet. The machine is only storing the first stable inform
 
 Once the input is received, the system activates the conversational structure through a **system prompt** that defines the behavior of the two agents and the rules of the interaction.
 
-#### System Prompt (Installation Logic)
+  #### System Prompt (Installation Logic)
 
 The user provides an input describing a personal concern about the future or any topic relevant to their life. Based on this input, a dialogue begins between two chatbots: **Giuseppe** and **Martina**, who embody opposing perspectives.
 
@@ -143,8 +143,8 @@ The user provides an input describing a personal concern about the future or any
 **Dialogue Structure**
 
 * The conversation consists of **5 to 7 exchanges**
-* Giuseppe always speaks first
-* Each response is brief, fast-paced, and confrontational
+* The first response is an answer to the user prompt
+* Other response is brief, fast-paced, and confrontational
 * The agents actively challenge each other
 * The tone creates tension, not harmony
 

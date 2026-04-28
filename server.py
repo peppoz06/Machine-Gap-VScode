@@ -16,6 +16,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi import HTTPException
 from pydantic import BaseModel
 import httpx
+import threading
+import random
 
 
 # -------------------------------------------------
@@ -49,6 +51,24 @@ def render_template(template: str, ctx: dict) -> str:
 # -------------------------------------------------
 app = FastAPI()
 
+# Toggle state to alternate which agent starts each new conversation.
+# Uses a lock to be safe if multiple requests arrive concurrently.
+last_started_giuseppe = None  # None = not set yet; afterwards True/False
+last_started_lock = threading.Lock()
+
+def toggle_giuseppe_start(default_setting: bool) -> bool:
+    """Randomly choose who starts for each new conversation.
+    Returns True if Giuseppe should start, False for Martina.
+    The `default_setting` parameter is ignored to ensure truly random starts.
+    """
+    # random choice: True => Giuseppe starts, False => Martina starts
+    choice = random.choice([True, False])
+    # store last choice for observational/debugging if needed
+    global last_started_giuseppe
+    with last_started_lock:
+        last_started_giuseppe = choice
+    return choice
+
 
 # This defines the shape of the data we expect from the frontend
 class ChatRequest(BaseModel):
@@ -76,6 +96,9 @@ async def chat(request: ChatRequest):
 
     num_exchanges = int(dialogue_cfg.get("num_exchanges", 7))
     memory_schedule = dialogue_cfg.get("memory_schedule", {})
+
+    # decide who starts for this entire conversation (may alternate between requests)
+    giuseppe_starts = toggle_giuseppe_start(dialogue_cfg.get("giuseppe_starts", True))
 
     # storage for turns
     G = []  # Giuseppe turns (index 0 = G1)
@@ -151,8 +174,7 @@ async def chat(request: ChatRequest):
                 if "restore I0" in directive:
                     I0_present = True
 
-            # determine speaker: Giuseppe starts -> odd = Giuseppe
-            giuseppe_starts = bool(dialogue_cfg.get("giuseppe_starts", True))
+            # determine speaker for this exchange (use the per-request starter)
             is_giuseppe_turn = (exch % 2 == 1) if giuseppe_starts else (exch % 2 == 0)
             speaker_key = "giuseppe" if is_giuseppe_turn else "martina"
             agent_cfg = agents_cfg.get(speaker_key, {})
@@ -172,16 +194,19 @@ async def chat(request: ChatRequest):
             agent_system_template = agent_cfg.get("system_prompt_template", "")
             agent_system_prompt = render_template(agent_system_template, {"user_input": I0, "memory": memory_fragment})
 
-            exchange_history = []
-            # build a simple serialized history available to the agent
-            for i, text in enumerate(G, start=1):
-                exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
-            for i, text in enumerate(M, start=1):
-                exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
+            # For the very first exchange we pass an empty history so the first responder doesn't consult the other agent
+            if exch == 1:
+                serialized_history = ""
+            else:
+                exchange_history = []
+                # build a simple serialized history available to the agent
+                for i, text in enumerate(G, start=1):
+                    exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
+                for i, text in enumerate(M, start=1):
+                    exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
 
-            # sort by exchange number approx (Giuseppe and Martina interleaved)
-            # For simplicity, we just provide the concatenated history
-            serialized_history = json.dumps(exchange_history, ensure_ascii=False)
+                # For simplicity, provide the concatenated history
+                serialized_history = json.dumps(exchange_history, ensure_ascii=False)
 
             # render the agent turn using the agent_turn_template
             agent_turn_template = SETTINGS.get("prompt_templates", {}).get("agent_turn_template", "")
@@ -210,7 +235,6 @@ async def chat(request: ChatRequest):
     g_idx = 0
     m_idx = 0
     for exch in range(1, num_exchanges + 1):
-        giuseppe_starts = bool(dialogue_cfg.get("giuseppe_starts", True))
         is_giuseppe_turn = (exch % 2 == 1) if giuseppe_starts else (exch % 2 == 0)
         if is_giuseppe_turn:
             text = G[g_idx] if g_idx < len(G) else ""
@@ -316,6 +340,9 @@ async def stream_chat(request: ChatRequest):
                         pieces.append(p)
                 return " \n---\n ".join([s for s in pieces if s])
 
+            # decide who starts for this entire conversation (may alternate between requests)
+            giuseppe_starts = toggle_giuseppe_start(dialogue_cfg.get("giuseppe_starts", True))
+
             for exch in range(1, num_exchanges + 1):
                 sched_entry = memory_schedule.get(str(exch), {})
                 if isinstance(sched_entry, dict) and "system" in sched_entry:
@@ -325,7 +352,7 @@ async def stream_chat(request: ChatRequest):
                     if "restore I0" in directive:
                         I0_present = True
 
-                giuseppe_starts = bool(dialogue_cfg.get("giuseppe_starts", True))
+                # determine speaker for this exchange (use the per-request starter)
                 is_giuseppe_turn = (exch % 2 == 1) if giuseppe_starts else (exch % 2 == 0)
                 speaker_key = "giuseppe" if is_giuseppe_turn else "martina"
                 agent_cfg = agents_cfg.get(speaker_key, {})
@@ -340,12 +367,16 @@ async def stream_chat(request: ChatRequest):
                 agent_system_template = agent_cfg.get("system_prompt_template", "")
                 agent_system_prompt = render_template(agent_system_template, {"user_input": I0, "memory": memory_fragment})
 
-                exchange_history = []
-                for i, text in enumerate(G, start=1):
-                    exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
-                for i, text in enumerate(M, start=1):
-                    exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
-                serialized_history = json.dumps(exchange_history, ensure_ascii=False)
+                # For the very first exchange do not provide prior exchanges so the initial responder doesn't consult the other agent
+                if exch == 1:
+                    serialized_history = ""
+                else:
+                    exchange_history = []
+                    for i, text in enumerate(G, start=1):
+                        exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
+                    for i, text in enumerate(M, start=1):
+                        exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
+                    serialized_history = json.dumps(exchange_history, ensure_ascii=False)
 
                 agent_turn_template = SETTINGS.get("prompt_templates", {}).get("agent_turn_template", "")
                 ctx = {
