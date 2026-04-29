@@ -54,7 +54,6 @@ if (!form) {
     if (typeof initTTS === 'function') {
       console.log("✓ Calling initTTS()");
       initTTS();
-      log("Voice system initialized (click button to enable)", true);
     } else {
       console.error("❌ initTTS is not a function! typeof =", typeof initTTS);
     }
@@ -69,10 +68,7 @@ if (!form) {
     userDiv.textContent = prompt;
     dialogueDiv.appendChild(userDiv);
 
-    log("Initializing dialogue orchestration...", true);
-
     // Use the streaming /stream_chat endpoint with per-turn callbacks
-    log("Connecting to streaming endpoint...", true);
     console.log("Calling sendPrompt with callbacks...");
     
     sendPrompt(
@@ -80,13 +76,11 @@ if (!form) {
       function (turnObj) {
         // onTurn callback - render each turn as it arrives
         console.log("onTurn callback received for", turnObj.speaker);
-        log("Rendering turn: " + turnObj.speaker + " (exchange " + turnObj.exchange + ")", true);
         renderStreamTurn(turnObj, dialogueDiv);
       },
       function (metricsObj) {
         // onMetrics callback - render metrics after all turns complete
         console.log("onMetrics callback received");
-        log("Rendering metrics...", true);
         renderMetrics(metricsObj, metricsDiv);
         showDissolution();
       },
@@ -106,6 +100,4 @@ function showDissolution() {
   dissDiv.style.marginTop = "2rem";
   dissDiv.innerHTML = "<p>The conversation is closed.</p><p>Memory is erased. Meaning collapses.</p>";
   metricsDiv.parentNode.appendChild(dissDiv);
-
-  log("Dialogue complete.", true);
 }

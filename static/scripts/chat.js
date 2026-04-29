@@ -4,9 +4,6 @@
 
 console.log("chat.js loading...");
 
-var chat = document.getElementById("chat");
-console.log("Chat div found:", !!chat);
-
 // Render a single turn in the output stage (streaming)
 function renderStreamTurn(turn, container) {
   console.log("renderStreamTurn called for", turn.speaker);
@@ -19,13 +16,13 @@ function renderStreamTurn(turn, container) {
   var isVoiceEnabled = (typeof window.ttsEnabled !== 'undefined' && window.ttsEnabled);
   
   if (isVoiceEnabled) {
-    // Hide text initially - will show when voice starts
-    div.style.opacity = "0";
+    // Set text to visible (opacity 1) - will be revealed when voice starts
+    div.style.opacity = "1";
     div.style.transition = "opacity 0.3s ease-in";
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     
-    console.log("🎤 Text hidden, will show when voice starts for " + turn.speaker);
+    console.log("🎤 Text visible, will fade when voice starts for " + turn.speaker);
   } else {
     // If voice is disabled, show text immediately
     container.appendChild(div);
@@ -62,13 +59,4 @@ function renderMetrics(metrics, container) {
   `;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
-}
-
-// Append a single turn (used by the streaming endpoint in legacy mode)
-function appendTurn(turn) {
-  addMessage("assistant", `${turn.speaker}: ${turn.text}`);
-}
-
-function showMetrics(metrics) {
-  addMessage("assistant", `Metrics — chars: ${metrics.chars}, tokens: ${metrics.tokens}, energy: ${metrics.energy}`);
 }

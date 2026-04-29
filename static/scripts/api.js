@@ -9,7 +9,6 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
   
   try {
     logClear(true);
-    log("Fetching /stream_chat endpoint...", true);
     
     const response = await fetch("/stream_chat", {
       method: "POST",
@@ -23,8 +22,6 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
       return;
     }
 
-    log("Stream connected, reading events...", true);
-    
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -47,11 +44,9 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
 
           if (obj.type === "turn") {
             console.log("Parsed turn:", obj.speaker);
-            log(obj.speaker + ": " + obj.text.substring(0, 50) + "...", true);
             onTurn(obj);
           } else if (obj.type === "metrics") {
             console.log("Parsed metrics");
-            log("Metrics received: " + obj.tokens + " tokens, " + obj.energy.toFixed(6) + " energy", true);
             onMetrics(obj);
           }
         } catch (e) {
@@ -75,7 +70,6 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
       }
     }
 
-    log("Stream complete.", true);
     console.log("Stream ended successfully");
   } catch (error) {
     console.error("sendPrompt error:", error);

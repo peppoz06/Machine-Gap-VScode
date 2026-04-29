@@ -134,14 +134,57 @@ async def chat(request: ChatRequest):
         # join non-empty pieces with ' | ' for clarity
         return " \n---\n ".join([s for s in pieces if s])
 
+    def format_prior_responses(g_list, m_list, is_giuseppe: bool) -> str:
+        """Format prior responses by the current speaker to prevent repetition."""
+        prior_list = g_list if is_giuseppe else m_list
+        if not prior_list:
+            return ""
+        prior_str = "\n".join([f"- {text}" for text in prior_list])
+        return f"Your prior responses (DO NOT repeat these exact phrases or ideas):\n{prior_str}"
+
+    def is_too_similar(response: str, prior_list: list, threshold: float = 0.7) -> bool:
+        """Check if response is too similar to any prior response (simple substring overlap)."""
+        if not prior_list or not response:
+            return False
+        response_words = set(response.lower().split())
+        for prior in prior_list:
+            prior_words = set(prior.lower().split())
+            # Calculate Jaccard similarity (overlap)
+            if response_words and prior_words:
+                overlap = len(response_words & prior_words) / max(len(response_words), len(prior_words))
+                if overlap > threshold:
+                    return True
+        return False
+
+    def enforce_character_limit(text: str, max_chars: int = 200) -> str:
+        """Trim response to max_chars if it exceeds the limit. Cut at sentence boundary if possible."""
+        if len(text) <= max_chars:
+            return text
+        # Try to find a sentence boundary (period, question mark, exclamation) within the limit
+        trimmed = text[:max_chars]
+        for char in ['.', '?', '!']:
+            last_idx = trimmed.rfind(char)
+            if last_idx > 0:
+                return trimmed[:last_idx + 1]
+        # If no sentence boundary, just trim to max_chars
+        return trimmed.rstrip()
+
     async with httpx.AsyncClient(timeout=60.0) as client:
 
         # helper to call Ollama and collect full text for a single turn
         async def call_ollama_for(prompt_text: str) -> str:
             # Use streaming to be robust, but accumulate full text
             text_acc = ""
+            max_tokens = int(runtime_defaults.get("max_tokens_per_reply", 40))
             try:
-                async with client.stream("POST", OLLAMA_URL, json={"model": OLLAMA_MODEL, "prompt": prompt_text}) as resp:
+                async with client.stream("POST", OLLAMA_URL, json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt_text,
+                    "num_predict": max_tokens,
+                    "temperature": 0.7,
+                    "top_k": 40,
+                    "top_p": 0.9
+                }) as resp:
                     async for line in resp.aiter_lines():
                         if not line:
                             continue
@@ -200,16 +243,23 @@ async def chat(request: ChatRequest):
             else:
                 exchange_history = []
                 # build a simple serialized history available to the agent
+                # BUT: only include turns by the OTHER agent to prevent the current agent from copying its own prior turns
                 for i, text in enumerate(G, start=1):
-                    exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
+                    if not is_giuseppe_turn:  # if it's Martina's turn, include Giuseppe's turns
+                        exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
                 for i, text in enumerate(M, start=1):
-                    exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
+                    if is_giuseppe_turn:  # if it's Giuseppe's turn, include Martina's turns
+                        exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
 
-                # For simplicity, provide the concatenated history
+                # For simplicity, provide the concatenated history (only from other speaker)
                 serialized_history = json.dumps(exchange_history, ensure_ascii=False)
 
             # render the agent turn using the agent_turn_template
             agent_turn_template = SETTINGS.get("prompt_templates", {}).get("agent_turn_template", "")
+            
+            # Get prior responses to prevent repetition
+            prior_responses = format_prior_responses(G, M, is_giuseppe_turn)
+            
             ctx = {
                 "system_header": f"Exchange {exch} — {speaker_name}",
                 "agent_system_prompt": agent_system_prompt,
@@ -217,11 +267,25 @@ async def chat(request: ChatRequest):
                 "response_length_hint": runtime_defaults.get("response_length_hint", "short (1-3 sentences)"),
                 "speaker": speaker_name,
                 "memory": memory_fragment,
+                "prior_responses": prior_responses,
             }
             composed = render_template(agent_turn_template, ctx)
 
             # call the model and store the result
             turn_text = await call_ollama_for(composed)
+            
+            # Enforce 200 character limit
+            turn_text = enforce_character_limit(turn_text, max_chars=200)
+
+            # Check if response is too similar to prior responses; if so, regenerate with stronger instruction
+            prior_list = G if is_giuseppe_turn else M
+            if exch > 1 and is_too_similar(turn_text, prior_list, threshold=0.65):
+                # Regenerate with stronger instruction
+                regen_ctx = ctx.copy()
+                regen_ctx["prior_responses"] = format_prior_responses(G, M, is_giuseppe_turn) + "\n\n⚠️ WARNING: Your last response was too similar to a prior one. Generate a COMPLETELY DIFFERENT argument or angle. Use different examples, reasoning, or focus. STRICT: 2–3 lines max, 200 chars max."
+                regen_composed = render_template(agent_turn_template, regen_ctx)
+                turn_text = await call_ollama_for(regen_composed)
+                turn_text = enforce_character_limit(turn_text, max_chars=200)
 
             if is_giuseppe_turn:
                 G.append(turn_text)
@@ -295,8 +359,16 @@ async def stream_chat(request: ChatRequest):
 
             async def call_ollama_for(prompt_text: str) -> str:
                 text_acc = ""
+                max_tokens = int(runtime_defaults.get("max_tokens_per_reply", 40))
                 try:
-                    async with client.stream("POST", OLLAMA_URL, json={"model": OLLAMA_MODEL, "prompt": prompt_text}) as resp:
+                    async with client.stream("POST", OLLAMA_URL, json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": prompt_text,
+                        "num_predict": max_tokens,
+                        "temperature": 0.7,
+                        "top_k": 40,
+                        "top_p": 0.9
+                    }) as resp:
                         async for line in resp.aiter_lines():
                             if not line:
                                 continue
@@ -314,6 +386,33 @@ async def stream_chat(request: ChatRequest):
                 except Exception as e:
                     return f"[error calling model: {e}]"
                 return text_acc.strip()
+
+            def is_too_similar(response: str, prior_list: list, threshold: float = 0.7) -> bool:
+                """Check if response is too similar to any prior response (simple substring overlap)."""
+                if not prior_list or not response:
+                    return False
+                response_words = set(response.lower().split())
+                for prior in prior_list:
+                    prior_words = set(prior.lower().split())
+                    # Calculate Jaccard similarity (overlap)
+                    if response_words and prior_words:
+                        overlap = len(response_words & prior_words) / max(len(response_words), len(prior_words))
+                        if overlap > threshold:
+                            return True
+                return False
+
+            def enforce_character_limit(text: str, max_chars: int = 200) -> str:
+                """Trim response to max_chars if it exceeds the limit. Cut at sentence boundary if possible."""
+                if len(text) <= max_chars:
+                    return text
+                # Try to find a sentence boundary (period, question mark, exclamation) within the limit
+                trimmed = text[:max_chars]
+                for char in ['.', '?', '!']:
+                    last_idx = trimmed.rfind(char)
+                    if last_idx > 0:
+                        return trimmed[:last_idx + 1]
+                # If no sentence boundary, just trim to max_chars
+                return trimmed.rstrip()
 
             def materialize_memory(spec: str, g_list, m_list, i0_val, i0_avail) -> str:
                 """Helper to materialize memory spec outside loop to avoid closure issues."""
@@ -339,6 +438,14 @@ async def stream_chat(request: ChatRequest):
                     else:
                         pieces.append(p)
                 return " \n---\n ".join([s for s in pieces if s])
+
+            def format_prior_responses(g_list, m_list, is_giuseppe: bool) -> str:
+                """Format prior responses by the current speaker to prevent repetition."""
+                prior_list = g_list if is_giuseppe else m_list
+                if not prior_list:
+                    return ""
+                prior_str = "\n".join([f"- {text}" for text in prior_list])
+                return f"Your prior responses (DO NOT repeat these exact phrases or ideas):\n{prior_str}"
 
             # decide who starts for this entire conversation (may alternate between requests)
             giuseppe_starts = toggle_giuseppe_start(dialogue_cfg.get("giuseppe_starts", True))
@@ -372,13 +479,21 @@ async def stream_chat(request: ChatRequest):
                     serialized_history = ""
                 else:
                     exchange_history = []
+                    # build a simple serialized history available to the agent
+                    # BUT: only include turns by the OTHER agent to prevent the current agent from copying its own prior turns
                     for i, text in enumerate(G, start=1):
-                        exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
+                        if not is_giuseppe_turn:  # if it's Martina's turn, include Giuseppe's turns
+                            exchange_history.append({"speaker": "Giuseppe", "exchange": i, "text": text})
                     for i, text in enumerate(M, start=1):
-                        exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
+                        if is_giuseppe_turn:  # if it's Giuseppe's turn, include Martina's turns
+                            exchange_history.append({"speaker": "Martina", "exchange": i, "text": text})
                     serialized_history = json.dumps(exchange_history, ensure_ascii=False)
 
                 agent_turn_template = SETTINGS.get("prompt_templates", {}).get("agent_turn_template", "")
+                
+                # Get prior responses to prevent repetition
+                prior_responses = format_prior_responses(G, M, is_giuseppe_turn)
+                
                 ctx = {
                     "system_header": f"Exchange {exch} — {speaker_name}",
                     "agent_system_prompt": agent_system_prompt,
@@ -386,11 +501,25 @@ async def stream_chat(request: ChatRequest):
                     "response_length_hint": runtime_defaults.get("response_length_hint", "short (1-3 sentences)"),
                     "speaker": speaker_name,
                     "memory": memory_fragment,
+                    "prior_responses": prior_responses,
                 }
                 composed = render_template(agent_turn_template, ctx)
 
                 # call the model
                 turn_text = await call_ollama_for(composed)
+                
+                # Enforce 200 character limit
+                turn_text = enforce_character_limit(turn_text, max_chars=200)
+
+                # Check if response is too similar to prior responses; if so, regenerate with stronger instruction
+                prior_list = G if is_giuseppe_turn else M
+                if exch > 1 and is_too_similar(turn_text, prior_list, threshold=0.65):
+                    # Regenerate with stronger instruction
+                    regen_ctx = ctx.copy()
+                    regen_ctx["prior_responses"] = format_prior_responses(G, M, is_giuseppe_turn) + "\n\n⚠️ WARNING: Your last response was too similar to a prior one. Generate a COMPLETELY DIFFERENT argument or angle. Use different examples, reasoning, or focus. STRICT: 2–3 lines max, 200 chars max."
+                    regen_composed = render_template(agent_turn_template, regen_ctx)
+                    turn_text = await call_ollama_for(regen_composed)
+                    turn_text = enforce_character_limit(turn_text, max_chars=200)
 
                 if is_giuseppe_turn:
                     G.append(turn_text)

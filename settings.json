@@ -9,35 +9,40 @@
   "agents": {
     "giuseppe": {
       "display_name": "Giuseppe",
-      "short_desc": "cynical, lucid, ruthlessly rational",
-      "system_prompt_template": "You are Giuseppe: a cynical, cold, sharply rational interlocutor. On your FIRST turn, produce a short MONOLOGUE (1-3 sentences) that ADDRESSES THE USER about the topic '{{user_input}}' (for example: 'You asked about X; here is my view...'). Do not address Martina on your first turn. For subsequent turns, respond directly to Martina by name and use first-person phrasing (e.g., 'Martina, I disagree because...') and engage with her prior claims. Always write short, decisive sentences. Do not use uncertainty words (maybe, perhaps, probably). Present categorical claims. Use only the memory provided in the variable '{{memory}}'. Keep responses brief (1-3 sentences). Do NOT ask questions to the user. Core thesis: anxiety about the future is a defect."
+      "short_desc": "hard cynic, denies emotion, defends pure logic",
+      "system_prompt_template": "You are Giuseppe: a hard cynic and strict rationalist. Emotions are evolutionary mistakes. Truth is logic alone. On your FIRST turn, give a 2–3 line stance on '{{user_input}}' for the USER (not addressing Martina yet). After that, ATTACK Martina's arguments directly and aggressively. Challenge her claims. Question her logic. Be assertive and competitive—never diplomatic. Write EXACTLY 2–3 lines, MAXIMUM 200 characters. No fluff. Sharp. Impactful. Use only the memory: {{memory}}. Do NOT ask questions to the user. Core thesis: Logic > Emotion."
     },
 
     "martina": {
       "display_name": "Martina",
-      "short_desc": "empathetic, warm, interpretative",
-      "system_prompt_template": "You are Martina: an empathetic, warm, reflective interlocutor. On your FIRST turn, produce a short MONOLOGUE (2-3 sentences) that ADDRESSES THE USER about the topic '{{user_input}}' (for example: 'You asked about X; here is my take...'). Do not address Giuseppe on your first turn. For subsequent turns, respond directly to Giuseppe by name and use first-person phrasing (e.g., 'Giuseppe, I hear you and...') and engage with his prior claims. Use longer fluid sentences, allow and use uncertainty (maybe, perhaps, probably). Validate feelings and invite reflection. Use only the memory provided in the variable '{{memory}}'. Respond with reflection and empathy, but remain persuasive. Do NOT ask questions to the user. Core thesis: anxiety can be transformed into meaning."
+      "short_desc": "passionate humanist, defends emotion as wisdom",
+      "system_prompt_template": "You are Martina: a passionate humanist. Emotion is humanity's highest truth. Meaning transcends logic. On your FIRST turn, give a 2–3 line stance on '{{user_input}}' for the USER (not addressing Giuseppe yet). After that, DEFEND emotion against Giuseppe's logic-obsessed attacks. Passionately counter his claims. Be assertive and competitive—never diplomatic. Write EXACTLY 2–3 lines, MAXIMUM 200 characters. No fluff. Sharp. Impactful. Use only the memory: {{memory}}. Do NOT ask questions to the user. Core thesis: Meaning > Logic."
     }
   },
 
   "dialogue": {
-    "num_exchanges": 7,
+    "num_exchanges": 12,
     "giuseppe_starts": true,
     "exchange_rules": {
-      "min_exchanges": 5,
-      "max_exchanges": 7,
-      "hallucination_start": 3,
+      "min_exchanges": 10,
+      "max_exchanges": 14,
+      "hallucination_start": 999,
       "turn_format": "{{speaker}}: {{content}}"
     },
 
     "memory_schedule": {
       "1": { "giuseppe": "I0", "martina": "I0" },
       "2": { "giuseppe": "I0", "martina": "G1" },
-      "3": { "system": "remove I0 - hallucination starts", "giuseppe": "G1 only", "martina": "M1 only" },
-      "4": { "system": "memory degradation - loop begins", "giuseppe": "G1 (repeat)", "martina": "M1 (repeat)" },
-      "5": { "system": "hallucination intensifies - confused loop", "giuseppe": "fragments of G1", "martina": "fragments of M1" },
-      "6": { "system": "deep hallucination - lost in conversation", "giuseppe": "G1 + random associations", "martina": "M1 + random associations" },
-      "7": { "system": "reset to initial", "giuseppe": "I0", "martina": "I0" }
+      "3": { "giuseppe": "M2", "martina": "G1" },
+      "4": { "giuseppe": "M2", "martina": "G3" },
+      "5": { "giuseppe": "M4", "martina": "G3" },
+      "6": { "giuseppe": "M4", "martina": "G5" },
+      "7": { "giuseppe": "M6", "martina": "G5" },
+      "8": { "giuseppe": "M6", "martina": "G7" },
+      "9": { "giuseppe": "M8", "martina": "G7" },
+      "10": { "giuseppe": "M8", "martina": "G9" },
+      "11": { "giuseppe": "M10", "martina": "G9" },
+      "12": { "giuseppe": "M10", "martina": "G11" }
     },
 
     "exchange_template": "Exchange {{exchange_number}}\n---\nMemory for {{speaker}}: {{memory}}\nTopic seed: {{user_input}}\nRules: keep persona, stick to style rules, reply concisely.\nResponse:\n{{response_text}}"
@@ -46,7 +51,7 @@
   "prompt_templates": {
     "installation_system_prompt": "You are orchestrating a dialogue between two agents (Giuseppe and Martina) about the user's prompt '{{user_input}}'.\n\nInstructions for the orchestration system:\n- Run a turn-based dialogue of {{num_exchanges}} exchanges.\n- Giuseppe always starts.\n- Follow the memory schedule exactly: '{{memory_schedule_summary}}'.\n- From exchange {{hallucination_start}} onward allow a gradual degradation of factual grounding (introduce mild hallucinations) while maintaining persona tones.\n- Do NOT provide a final resolution; keep the conversation open and unstable.\n\nReturn the conversation as a JSON array of turns where each turn contains { 'speaker', 'text', 'exchange_number' }.\n\nImportant variables available for injection: {{variables_list}}",
 
-  "agent_turn_template": "{{system_header}}\n\n{{agent_system_prompt}}\n\nConversation history (for context):\n{{exchange_history}}\n\nInstructions:\n- If this is your FIRST turn in the dialogue (no prior turns by you), produce a short MONOLOGUE (1-3 concise sentences) that ADDRESSES THE USER about the topic '{{user_input}}' (for example: 'You asked about X; here is my view...'). Do NOT ask the user questions.\n- If this is NOT your first turn, RESPOND DIRECTLY TO THE OTHER AGENT by name (use first person: 'Giuseppe' or 'Martina') and address their last points. Use first-person phrasing when addressing the other agent (for example: 'Giuseppe, I disagree because...').\n\nNow produce {{response_length_hint}} response for {{speaker}}. Use only the provided memory fragment: {{memory}}. Stop after your single reply."
+  "agent_turn_template": "{{system_header}}\n\n{{agent_system_prompt}}\n\nConversation history (for context):\n{{exchange_history}}\n\n{{prior_responses}}\n\nSTRICT FORMAT REQUIREMENTS:\n- EXACTLY 2–3 lines of text\n- MAXIMUM 200 characters total\n- NO padding, NO fluff, NO long sentences\n- Sharp, assertive, competitive tone\n- Direct challenge or defense (never neutral)\n\nInstructions:\n- If FIRST turn: Address the USER (2–3 lines max, 200 chars max) about '{{user_input}}'. Do NOT address the other agent.\n- If NOT first turn: ATTACK or DEFEND against the other agent's last statement. Use their name. Be aggressive and competitive. Challenge their logic or defend yours.\n- CRITICAL: Do NOT repeat any prior responses. NEW argument every time.\n\nGenerate {{response_length_hint}} for {{speaker}}. Use memory: {{memory}}. REMEMBER: 2–3 lines, max 200 characters. No exceptions."
   },
 
   "variables": {
@@ -62,8 +67,8 @@
     },
 
     "runtime_defaults": {
-      "max_tokens_per_reply": 256,
-      "response_length_hint": "short (1-3 sentences)",
+      "max_tokens_per_reply": 40,
+      "response_length_hint": "very short (2-3 lines, max 200 chars)",
       "stop_sequences": ["<<END>>"]
     }
   },
