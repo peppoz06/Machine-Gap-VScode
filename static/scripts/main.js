@@ -68,20 +68,16 @@ if (!form) {
     userDiv.textContent = prompt;
     dialogueDiv.appendChild(userDiv);
 
-    // Use the streaming /stream_chat endpoint with per-turn callbacks
-    console.log("Calling sendPrompt with callbacks...");
+    // Use the streaming /stream_chat endpoint to collect all turns, then process sequentially
+    console.log("Calling sendPrompt to collect all turns...");
     
     sendPrompt(
       prompt,
-      function (turnObj) {
-        // onTurn callback - render each turn as it arrives
-        console.log("onTurn callback received for", turnObj.speaker);
-        renderStreamTurn(turnObj, dialogueDiv);
-      },
-      function (metricsObj) {
-        // onMetrics callback - render metrics after all turns complete
-        console.log("onMetrics callback received");
-        renderMetrics(metricsObj, metricsDiv);
+      function (turns, metricsObj) {
+        // onDialogueComplete callback - all turns collected, now process sequentially
+        console.log("Dialogue complete callback: " + turns.length + " turns collected");
+        console.log("Starting sequential dialogue processing with TTS queue...");
+        processDialogueQueue(turns, metricsObj, dialogueDiv, metricsDiv);
         showDissolution();
       },
       function (error) {

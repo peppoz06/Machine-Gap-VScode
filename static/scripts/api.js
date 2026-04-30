@@ -4,7 +4,7 @@
 
 console.log("api.js loading...");
 
-async function sendPrompt(prompt, onTurn, onMetrics, onError) {
+async function sendPrompt(prompt, onDialogueComplete, onError) {
   console.log("sendPrompt called with prompt:", prompt.substring(0, 50));
   
   try {
@@ -25,6 +25,8 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let turns = [];
+    let metrics = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -44,10 +46,10 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
 
           if (obj.type === "turn") {
             console.log("Parsed turn:", obj.speaker);
-            onTurn(obj);
+            turns.push(obj);
           } else if (obj.type === "metrics") {
             console.log("Parsed metrics");
-            onMetrics(obj);
+            metrics = obj;
           }
         } catch (e) {
           logError("Failed to parse JSON line: " + e.message, true);
@@ -61,16 +63,19 @@ async function sendPrompt(prompt, onTurn, onMetrics, onError) {
       try {
         const obj = JSON.parse(buffer);
         if (obj.type === "turn") {
-          onTurn(obj);
+          turns.push(obj);
         } else if (obj.type === "metrics") {
-          onMetrics(obj);
+          metrics = obj;
         }
       } catch (e) {
         logError("Failed to parse final buffer: " + e.message, true);
       }
     }
 
-    console.log("Stream ended successfully");
+    console.log("Stream ended successfully - collected " + turns.length + " turns");
+    
+    // Call completion callback with all turns and metrics
+    onDialogueComplete(turns, metrics);
   } catch (error) {
     console.error("sendPrompt error:", error);
     logError("Fetch error: " + error.message, true);
