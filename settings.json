@@ -5,6 +5,8 @@
   },
 
   "ollama_model": "llama3.2",
+  "model_switch_exchange": 6,
+  "model_switch_target": "tinyllama:latest",
 
   "agents": {
     "giuseppe": {

@@ -27,6 +27,21 @@ settings_file = Path("settings.json").read_text()
 SETTINGS = json.loads(settings_file)
 
 OLLAMA_MODEL = SETTINGS.get("ollama_model", "llama3.2:3b")
+MODEL_SWITCH_EXCHANGE = SETTINGS.get("model_switch_exchange", 6)
+MODEL_SWITCH_TARGET = SETTINGS.get("model_switch_target", "tinyllama:latest")
+
+def select_model_for_exchange(exch: int, default_model: str) -> str:
+    """Return the model name to use for the given exchange number.
+
+    Uses the default_model for exchanges before MODEL_SWITCH_EXCHANGE,
+    and MODEL_SWITCH_TARGET from MODEL_SWITCH_EXCHANGE onward.
+    """
+    try:
+        if int(exch) >= int(MODEL_SWITCH_EXCHANGE):
+            return MODEL_SWITCH_TARGET
+    except Exception:
+        pass
+    return default_model
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 
@@ -44,6 +59,76 @@ def render_template(template: str, ctx: dict) -> str:
         return str(ctx.get(key, m.group(0)))
 
     return re.sub(r"{{\s*([a-zA-Z0-9_]+)\s*}}", _repl, template)
+
+
+# -------------------------------------------------
+# Load short tone exemplars from local debate transcripts
+# -------------------------------------------------
+def _clean_transcript_line(line: str) -> str:
+    """Sanitize a single transcript line: remove timestamps, speaker tags, markdown and extra whitespace."""
+    if not isinstance(line, str):
+        return ""
+    # remove markdown bold/italics markers
+    s = re.sub(r"\*+", "", line)
+    # remove timestamps like 00:00:00,360 --> 00:00:02,800
+    s = re.sub(r"\d{2}:\d{2}:\d{2}[\.,\d\s:-]*--?>\s*\d{2}:\d{2}:\d{2}[\.,\d\s:-]*", "", s)
+    # remove speaker labels like [Speaker 1] or **[Speaker 1]**
+    s = re.sub(r"\[.*?\]", "", s)
+    # remove leading/trailing punctuation and whitespace
+    s = s.strip(" \t\n\r-:;,.\u2026")
+    # collapse multiple spaces
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def load_tone_exemplars(directory: str = "dibattiti", max_examples: int = 6, max_chars: int = 140):
+    """Scan markdown files in `directory` and return a list of short exemplar lines.
+
+    Returns a list of cleaned lines suitable for injecting as style exemplars.
+    This is intentionally conservative: it picks lines between ~20 and max_chars characters.
+    """
+    exemplars = []
+    base = Path(directory)
+    if not base.exists() or not base.is_dir():
+        print(f"[tone] No dibattiti directory found at {base}; skipping tone exemplars.", file=sys.stderr)
+        return exemplars
+
+    try:
+        for fp in sorted(base.glob("*.md")):
+            try:
+                txt = fp.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            # split lines and clean
+            for raw in txt.splitlines():
+                line = _clean_transcript_line(raw)
+                if not line:
+                    continue
+                # heuristics: prefer lines that are neither too short nor too long
+                if 20 <= len(line) <= max_chars:
+                    # avoid lines that are just single words or stage directions
+                    if any(c.isalpha() for c in line):
+                        exemplars.append(line)
+                        if len(exemplars) >= max_examples:
+                            return exemplars
+        # fallback: if none found, try slightly shorter fragments
+        if not exemplars:
+            for fp in sorted(base.glob("*.md")):
+                txt = fp.read_text(encoding="utf-8")
+                for raw in txt.splitlines():
+                    line = _clean_transcript_line(raw)
+                    if 10 <= len(line) <= max_chars:
+                        exemplars.append(line)
+                        if len(exemplars) >= max_examples:
+                            return exemplars
+    except Exception as e:
+        print(f"[tone] Error while loading exemplars: {e}", file=sys.stderr)
+
+    return exemplars
+
+
+# load examples once at startup; consumers may override count via settings
+TONE_EXEMPLARS = load_tone_exemplars()
 
 
 # -------------------------------------------------
@@ -172,13 +257,18 @@ async def chat(request: ChatRequest):
     async with httpx.AsyncClient(timeout=60.0) as client:
 
         # helper to call Ollama and collect full text for a single turn
-        async def call_ollama_for(prompt_text: str) -> str:
+        async def call_ollama_for(prompt_text: str, model_override: str | None = None) -> str:
+            """Use streaming to call Ollama and return the accumulated text.
+
+            If model_override is provided, use that model for this call; otherwise use OLLAMA_MODEL.
+            """
             # Use streaming to be robust, but accumulate full text
             text_acc = ""
             max_tokens = int(runtime_defaults.get("max_tokens_per_reply", 40))
+            model_to_use = model_override or OLLAMA_MODEL
             try:
                 async with client.stream("POST", OLLAMA_URL, json={
-                    "model": OLLAMA_MODEL,
+                    "model": model_to_use,
                     "prompt": prompt_text,
                     "num_predict": max_tokens,
                     "temperature": 0.7,
@@ -236,6 +326,19 @@ async def chat(request: ChatRequest):
             # prepare agent prompts
             agent_system_template = agent_cfg.get("system_prompt_template", "")
             agent_system_prompt = render_template(agent_system_template, {"user_input": I0, "memory": memory_fragment})
+            # Optionally inject short tone exemplars (from local dibattiti transcripts)
+            tone_cfg = SETTINGS.get("tone_examples", {})
+            if TONE_EXEMPLARS and tone_cfg.get("enabled", True):
+                try:
+                    max_examples = int(tone_cfg.get("max_examples", 3))
+                except Exception:
+                    max_examples = 3
+                snippets = TONE_EXEMPLARS[:max_examples]
+                prefix = "Tone exemplars (brief style cues from local debates):\n"
+                for s in snippets:
+                    prefix += f"- {s}\n"
+                # prepend to system prompt so it guides stylistic choices without overwriting instructions
+                agent_system_prompt = prefix + "\n" + agent_system_prompt
 
             # For the very first exchange we pass an empty history so the first responder doesn't consult the other agent
             if exch == 1:
@@ -271,12 +374,15 @@ async def chat(request: ChatRequest):
             }
             composed = render_template(agent_turn_template, ctx)
 
+            # decide which model to use for this exchange (configurable)
+            model_name = select_model_for_exchange(exch, OLLAMA_MODEL)
+            print(f"[/chat] Exchange {exch} using model: {model_name}", file=sys.stderr)
+
             # call the model and store the result
-            turn_text = await call_ollama_for(composed)
-            
+            turn_text = await call_ollama_for(composed, model_override=model_name)
+
             # Enforce 200 character limit
             turn_text = enforce_character_limit(turn_text, max_chars=200)
-
             # Check if response is too similar to prior responses; if so, regenerate with stronger instruction
             prior_list = G if is_giuseppe_turn else M
             if exch > 1 and is_too_similar(turn_text, prior_list, threshold=0.65):
@@ -357,12 +463,13 @@ async def stream_chat(request: ChatRequest):
 
         async with httpx.AsyncClient(timeout=60.0) as client:
 
-            async def call_ollama_for(prompt_text: str) -> str:
+            async def call_ollama_for(prompt_text: str, model_override: str | None = None) -> str:
                 text_acc = ""
                 max_tokens = int(runtime_defaults.get("max_tokens_per_reply", 40))
+                model_to_use = model_override or OLLAMA_MODEL
                 try:
                     async with client.stream("POST", OLLAMA_URL, json={
-                        "model": OLLAMA_MODEL,
+                        "model": model_to_use,
                         "prompt": prompt_text,
                         "num_predict": max_tokens,
                         "temperature": 0.7,
@@ -473,6 +580,18 @@ async def stream_chat(request: ChatRequest):
 
                 agent_system_template = agent_cfg.get("system_prompt_template", "")
                 agent_system_prompt = render_template(agent_system_template, {"user_input": I0, "memory": memory_fragment})
+                # Optionally inject short tone exemplars (from local dibattiti transcripts)
+                tone_cfg = SETTINGS.get("tone_examples", {})
+                if TONE_EXEMPLARS and tone_cfg.get("enabled", True):
+                    try:
+                        max_examples = int(tone_cfg.get("max_examples", 3))
+                    except Exception:
+                        max_examples = 3
+                    snippets = TONE_EXEMPLARS[:max_examples]
+                    prefix = "Tone exemplars (brief style cues from local debates):\n"
+                    for s in snippets:
+                        prefix += f"- {s}\n"
+                    agent_system_prompt = prefix + "\n" + agent_system_prompt
 
                 # For the very first exchange do not provide prior exchanges so the initial responder doesn't consult the other agent
                 if exch == 1:
@@ -505,9 +624,13 @@ async def stream_chat(request: ChatRequest):
                 }
                 composed = render_template(agent_turn_template, ctx)
 
+                # decide which model to use for this exchange (configurable)
+                model_name = select_model_for_exchange(exch, OLLAMA_MODEL)
+                print(f"[/stream_chat] Exchange {exch} using model: {model_name}", file=sys.stderr)
+
                 # call the model
-                turn_text = await call_ollama_for(composed)
-                
+                turn_text = await call_ollama_for(composed, model_override=model_name)
+
                 # Enforce 200 character limit
                 turn_text = enforce_character_limit(turn_text, max_chars=200)
 
@@ -518,7 +641,8 @@ async def stream_chat(request: ChatRequest):
                     regen_ctx = ctx.copy()
                     regen_ctx["prior_responses"] = format_prior_responses(G, M, is_giuseppe_turn) + "\n\n⚠️ WARNING: Your last response was too similar to a prior one. Generate a COMPLETELY DIFFERENT argument or angle. Use different examples, reasoning, or focus. STRICT: 2–3 lines max, 200 chars max."
                     regen_composed = render_template(agent_turn_template, regen_ctx)
-                    turn_text = await call_ollama_for(regen_composed)
+                    print(f"[/chat] Regeneration for exchange {exch} using model: {model_name}", file=sys.stderr)
+                    turn_text = await call_ollama_for(regen_composed, model_override=model_name)
                     turn_text = enforce_character_limit(turn_text, max_chars=200)
 
                 if is_giuseppe_turn:
